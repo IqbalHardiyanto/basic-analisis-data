@@ -20,7 +20,7 @@ def load_data():
 df = load_data()
 
 # Title
-st.title("Bike Sharing Demand Analysis 🚴♂️")
+st.title("Bike Sharing Demand Analysis 🚴")
 st.markdown("Analyzing how weather, time, and holidays impact bike rentals.")
 
 # --------------------------
