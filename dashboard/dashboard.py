@@ -14,7 +14,7 @@ st.set_page_config(
 # Load the merged data
 @st.cache_data
 def load_data():
-    df = pd.read_csv('bike_sharing_analysis_results.csv')
+    df = pd.read_csv('dashboard/bike_sharing_analysis_results.csv')
     return df
 
 df = load_data()
