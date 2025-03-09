@@ -1,183 +1,170 @@
+# dashboard/dashboard.py
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
 
-# Set page config
-st.set_page_config(
-    page_title="Dashboard",
-    page_icon="🚲",
-    layout="wide"
-)
 
-# Load the merged data
+# Konfigurasi tampilan
+st.set_page_config(page_title="Dashboard", page_icon="🚲", layout="wide")
+sns.set_style('whitegrid')
+
+st.title("Analisis Penyewaan Sepeda 🚵")
+st.markdown("Menganalisis bagaimana cuaca, waktu, dan hari libur memengaruhi penyewaan sepeda.")
+
+# Fungsi pembaca data
 @st.cache_data
 def load_data():
-    df = pd.read_csv('dashboard/bike_sharing_analysis_results.csv')
+    # Baca data mentah
+    raw_df = pd.read_csv('hour.csv')
+    
+    # Baca data gabungan untuk analisis lain
+    combined_df = pd.read_csv('combined_data_bike.csv')
+    
+    return raw_df, combined_df
+
+# Memuat data
+raw_df, combined_df = load_data()
+
+# Proses data untuk boxplot
+def process_day_data(df):
+    # Buat kolom kategori hari
+    df['jenis_hari'] = df.apply(lambda x: 
+        'Hari Kerja' if x['workingday'] == 1 else
+        'Hari Libur' if x['holiday'] == 1 else 
+        'Weekend', axis=1)
+    
     return df
 
-df = load_data()
+# Sidebar
 
-# Title
-st.title("Bike Sharing Demand Analysis 🚴")
-st.markdown("Analyzing how weather, time, and holidays impact bike rentals.")
+with st.sidebar:
+    st.image("https://images.unsplash.com/photo-1485965120184-e220f721d03e")
+    st.title("Tentang")
+    st.markdown(""" 
+                **Analisis Penyewaan Sepeda** 
+                - Dataset: hour.csv dan combined_data_bike.csv
+                - Penulis: Muh. Iqbal Hardiyanto """)
 
-# --------------------------
-# Section 1: Weather Impact
-# --------------------------
-st.header("1. Weather Conditions & Rentals")
-tab1, tab2, tab3 = st.tabs(["Weather Situation", "Temperature/Humidity", "Wind Speed"])
+# Tab untuk organisasi konten
+tab1, tab2, tab3 = st.tabs(["Pengaruh Cuaca", "Analisis Hari", "Tren Bulanan"])
 
 with tab1:
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.boxplot(x='weathersit', y='registered', data=df, ax=ax, palette="Blues", showfliers=False)
-    ax.set_title("Registered Rentals by Weather Condition")
-    ax.set_xlabel("Weather")
-    ax.set_ylabel("Registered Users")
-    st.pyplot(fig)
+    st.header("Pengaruh Kondisi Cuaca Terhadap Penyewaan")
+    
+    # Ambil data cuaca dari data gabungan
+    weather_df = combined_df[combined_df['kategori'] == 'cuaca']
+    
+    fig1, ax1 = plt.subplots(figsize=(10, 5))
+    sns.barplot(
+        data=weather_df, 
+        x='weather_label', 
+        y='total',
+        palette='coolwarm',
+        ax=ax1
+    )
+    ax1.set_title('Total Penyewaan berdasarkan Kondisi Cuaca', fontsize=14)
+    ax1.set_xlabel('Kondisi Cuaca')
+    ax1.set_ylabel('Total Sewa (juta)')
+    ax1.ticklabel_format(style='plain', axis='y')
+    st.pyplot(fig1)
+    
+    # Insight
+    st.markdown("""
+    **🔍 Insight Cuaca:**
+    - **Pengaruh Dominan:** Cuaca cerah (Clear) menyumbang **87.5%** dari total penyewaan 
+      `(1.875.428 dari 2.147.662 sewa)`
+    - **Penurunan Drastis:** Kondisi hujan/salju berat mengurangi penyewaan hingga **99.9%** 
+      dibanding kondisi cerah `(215 vs 1.875.428 sewa)`
+    - **Pola Jam Sibuk:** Pada cuaca cerah, penyewaan rata-rata/jam mencapai **164 sewa**, 
+      3x lebih tinggi dari kondisi hujan ringan
+    """)
 
 with tab2:
+    st.header("Perbandingan Penyewaan Hari Kerja vs Hari Libur")
+    
+    # Proses data mentah untuk boxplot
+    processed_df = process_day_data(raw_df)
+    
+    # Membagi layout menjadi 2 kolom
     col1, col2 = st.columns(2)
+    
     with col1:
-        fig1, ax1 = plt.subplots()
-        sns.scatterplot(x='temp_actual', y='registered', data=df, ax=ax1, color='red')
-        ax1.set_title("Temperature vs Rentals")
-        st.pyplot(fig1)
+        # Ambil data hari dari data gabungan
+        day_df = combined_df[combined_df['kategori'] == 'hari']
+        clean_day_df = day_df[~day_df['jenis_hari'].isna()]
+        
+        fig2a, ax2a = plt.subplots(figsize=(8, 4))
+        sns.barplot(
+            data=clean_day_df,
+            x='jenis_hari',
+            y='total',
+            palette='viridis',
+            ax=ax2a
+        )
+        ax2a.set_title('Total Penyewaan per Kategori Hari')
+        ax2a.set_ylabel('Total Sewa (juta)')
+        st.pyplot(fig2a)
+    
     with col2:
-        fig2, ax2 = plt.subplots()
-        sns.scatterplot(x='hum_actual', y='registered', data=df, ax=ax2, color='green')
-        ax2.set_title("Humidity vs Rentals")
-        st.pyplot(fig2)
+        # Gunakan data mentah untuk boxplot
+        fig2b, ax2b = plt.subplots(figsize=(8, 4))
+        sns.boxplot(
+            data=processed_df,
+            x='jenis_hari',
+            y='registered',
+            palette='viridis',
+            showfliers=False,
+            ax=ax2b,
+            order=['Hari Kerja', 'Hari Libur', 'Weekend']
+        )
+        ax2b.set_title('Distribusi Sewa per Jam (Data Mentah)')
+        ax2b.set_ylabel('Jumlah Sewa per Jam')
+        ax2b.set_xlabel('Kategori Hari')
+        st.pyplot(fig2b)
+        
+        # Insight
+    st.markdown("""
+    **🔍 Insight Hari:**
+    - **Dominasi Hari Kerja:** Menyumbang **77.4%** total sewa `(1.989.125 sewa)` 
+      dengan pola konsisten di jam 7-9 pagi dan 5-7 malam
+    - **Variasi Weekend:** Distribusi sewa lebih merata di weekend dengan rentang 
+      50-200 sewa/jam (lihat boxplot)
+    - **Outlier Hari Libur:** Terdapat jam-jam tertentu di hari libur mencapai **600+ sewa**, 
+      kemungkinan di lokasi wisata
+    """)
 
 with tab3:
-    fig, ax = plt.subplots()
-    sns.scatterplot(x='windspeed_actual', y='registered', data=df, ax=ax, color='blue')
-    ax.set_title("Wind Speed vs Rentals")
-    st.pyplot(fig)
-
-# --------------------------
-# Section 2: Temporal Patterns
-# --------------------------
-st.header("2. Time-Based Patterns")
-tab4, tab5 = st.tabs(["Seasonal Trends", "Hourly Clusters"])
-
-with tab4:
-    fig, ax = plt.subplots(figsize=(10, 6))
+    st.header("Tren Penyewaan Bulanan")
+    
+    # Ambil data bulanan dari data gabungan
+    monthly_df = combined_df[combined_df['kategori'] == 'bulan']
+    monthly_clean = monthly_df.sort_values('mnth').dropna(subset=['bulan'])
+    
+    fig3, ax3 = plt.subplots(figsize=(12, 6))
     sns.lineplot(
-        x='hr', 
-        y='registered', 
-        hue='season', 
-        data=df, 
-        ax=ax, 
-        palette='viridis', 
-        estimator='mean'
+        data=monthly_clean,
+        x='bulan',
+        y='total',
+        marker='o',
+        color='green',
+        label='Total Sewa'
     )
-    ax.set_title("Hourly Rentals by Season")
-    st.pyplot(fig)
-
-with tab5:
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(
-        x='time_cluster', 
-        y='registered', 
-        data=df, 
-        ax=ax, 
-        palette='Set2', 
-        estimator='mean'
-    )
-    ax.set_title("Average Rentals by Time Cluster")
-    st.pyplot(fig)
-
-# --------------------------
-# Section 3: Holiday/Weekend Analysis
-# --------------------------
-st.header("3. Holiday & Weekend Trends")
-holiday_type = st.radio("Select Day Type:", ["Holiday", "Weekend"])
-
-if holiday_type == "Holiday":
-    filtered_df = df[df['holiday'] == 1]
-else:
-    filtered_df = df[df['workingday'] == 0]
-
-fig, ax = plt.subplots(figsize=(10, 6))
-sns.lineplot(
-    x='hr', 
-    y='registered', 
-    data=filtered_df, 
-    ax=ax, 
-    color='purple', 
-    estimator='mean'
-)
-ax.set_title(f"Hourly Rentals on {holiday_type}s")
-st.pyplot(fig)
-
-
-# --------------------------
-# Section 4: Advanced Analysis (NEW)
-# --------------------------
-st.header("4. Advanced Analysis")
-tab6, tab7 = st.tabs(["Multivariate Correlation", "Weather-Time Clusters"])
-
-with tab6:
-    st.subheader("Multivariate Impact on Rentals")
-    selected_vars = st.multiselect(
-        "Select variables to correlate with rentals:",
-        options=['temp_actual', 'hum_actual', 'windspeed_actual', 'hr'],
-        default=['temp_actual', 'hr']
-    )
-    
-    if selected_vars:
-        corr_matrix = df[selected_vars + ['registered']].corr()
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.heatmap(corr_matrix, annot=True, cmap="icefire", ax=ax)
-        ax.set_title("Correlation Matrix: Selected Variables vs Rentals")
-        st.pyplot(fig)
-    else:
-        st.warning("Please select at least one variable.")
-
-with tab7:
-    st.subheader("Optimal Weather-Time Clusters")
-    
-    # Define optimal thresholds
-    temp_threshold = st.slider("Temperature Threshold (°C)", 10, 30, 20)
-    wind_threshold = st.slider("Wind Speed Threshold (km/h)", 10, 40, 25)
-    
-    # Create clusters
-    df['optimal_cluster'] = np.where(
-        (df['temp_actual'] >= temp_threshold) & 
-        (df['windspeed_actual'] <= wind_threshold),
-        "Optimal",
-        "Suboptimal"
-    )
-    
-    # Plot cluster comparison
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(
-        x='time_cluster',
-        y='registered',
-        hue='optimal_cluster',
-        data=df,
-        palette="viridis",
-        estimator=np.mean,
-        ax=ax
-    )
-    ax.set_title(f"Rentals in Optimal vs Suboptimal Conditions (Temp ≥{temp_threshold}°C, Wind ≤{wind_threshold}km/h)")
-    st.pyplot(fig)
-
-# --------------------------
-# Raw Data Preview (Optional)
-# --------------------------
-with st.expander("View Raw Data"):
-    st.dataframe(df)
-
-# --------------------------
-# Key Insights Summary
-# --------------------------
-st.header("Key Insights")
-st.markdown("""
-- Cuaca Optimal: 20-25°C, langit cerah, kelembapan <80%.
-- Jam Puncak: Pukul 8 pagi dan 5 - 6 sore pada hari kerja.
-- Hari Libur: Penyewaan 15% lebih rendah secara keseluruhan, tetapi wahana rekreasi mencapai puncaknya pada pukul 12-3 siang.
-- Kondisi Terburuk: Hujan lebat/salju mengurangi penyewaan hingga 50%.
-""")
+    ax3.set_title('Tren Penyewaan Sepeda Sepanjang Tahun', fontsize=14)
+    ax3.set_xlabel('Bulan')
+    ax3.set_ylabel('Total Sewa (juta)')
+    ax3.ticklabel_format(style='plain', axis='y')
+    plt.xticks(rotation=45)
+    st.pyplot(fig3)
+    st.markdown("""
+    **🔍 Insight Tren Bulanan:**
+    - **Musim Puncak:** September menjadi bulan terbaik dengan **345.991 sewa** 
+      (`+14.8%` dari Agustus)
+    - **Dampak Musim Hujan:** Penurunan **39.2%** di Desember bertepatan dengan 
+      peningkatan 144 hari hujan
+    - **Pertumbuhan Signifikan:** 
+      - April `(+51.3%)` - awal musim semi
+      - Mei `(+23.3%)` - persiapan musim panas
+    - **Korelasi Negatif:** 
+      `r = -0.76` antara hari hujan dan jumlah sewa
+    """)
