@@ -16,10 +16,10 @@ st.markdown("Menganalisis bagaimana cuaca, waktu, dan hari libur memengaruhi pen
 @st.cache_data
 def load_data():
     # Baca data mentah
-    raw_df = pd.read_csv('hour.csv')
+    raw_df = pd.read_csv('dashboard/hour.csv')
     
     # Baca data gabungan untuk analisis lain
-    combined_df = pd.read_csv('combined_data_bike.csv')
+    combined_df = pd.read_csv('dashboard/combined_data_bike.csv')
     
     return raw_df, combined_df
 
