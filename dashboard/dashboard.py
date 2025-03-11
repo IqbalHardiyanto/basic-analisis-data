@@ -1,9 +1,7 @@
-# dashboard/dashboard.py
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-
 
 # Konfigurasi tampilan
 st.set_page_config(page_title="Dashboard", page_icon="🚲", layout="wide")
@@ -15,29 +13,21 @@ st.markdown("Menganalisis bagaimana cuaca, waktu, dan hari libur memengaruhi pen
 # Fungsi pembaca data
 @st.cache_data
 def load_data():
-    # Baca data mentah
-    raw_df = pd.read_csv('dashboard/hour.csv')
-    
-    # Baca data gabungan untuk analisis lain
-    combined_df = pd.read_csv('dashboard/combined_data_bike.csv')
-    
+    raw_df = pd.read_csv('hour.csv')
+    combined_df = pd.read_csv('combined_data_bike.csv')
     return raw_df, combined_df
 
-# Memuat data
 raw_df, combined_df = load_data()
 
 # Proses data untuk boxplot
 def process_day_data(df):
-    # Buat kolom kategori hari
     df['jenis_hari'] = df.apply(lambda x: 
         'Hari Kerja' if x['workingday'] == 1 else
         'Hari Libur' if x['holiday'] == 1 else 
         'Weekend', axis=1)
-    
     return df
 
 # Sidebar
-
 with st.sidebar:
     st.image("https://images.unsplash.com/photo-1485965120184-e220f721d03e")
     st.title("Tentang")
@@ -45,6 +35,39 @@ with st.sidebar:
                 **Analisis Penyewaan Sepeda** 
                 - Dataset: hour.csv dan combined_data_bike.csv
                 - Penulis: Muh. Iqbal Hardiyanto """)
+    
+    # ================= FITUR INTERAKTIF =================
+    st.header("🛠️ Filter Data")
+    
+    # Filter 1: Cuaca dan Total Sewa
+    cuaca_data = combined_df[combined_df['kategori'] == 'cuaca']
+    weather_labels = cuaca_data['weather_label'].unique()
+    selected_weather = st.multiselect(
+        "Pilih Kondisi Cuaca",
+        options=weather_labels,
+        default=weather_labels
+    )
+    
+    total_range = st.slider(
+        "Rentang Total Sewa (juta)",
+        min_value=float(cuaca_data['total'].min()),
+        max_value=float(cuaca_data['total'].max()),
+        value=(float(cuaca_data['total'].min()), float(cuaca_data['total'].max()))
+    )
+    
+    # Filter 2: Sewa per Jam
+    cnt_range = st.slider(
+        "Rentang Sewa per Jam",
+        min_value=int(raw_df['cnt'].min()),
+        max_value=int(raw_df['cnt'].max()),
+        value=(int(raw_df['cnt'].min()), int(raw_df['cnt'].max()))
+    )
+    
+    # Fitur Pencarian
+    st.header("🔍 Pencarian")
+    if st.button("Cari Sewa Tertinggi"):
+        max_row = raw_df.loc[raw_df['cnt'].idxmax()]
+        st.success(f"**Rekor Tertinggi:** {max_row['cnt']} sewa pada {max_row['dteday']} jam {max_row['hr']}")
 
 # Tab untuk organisasi konten
 tab1, tab2, tab3 = st.tabs(["Pengaruh Cuaca", "Analisis Hari", "Tren Bulanan"])
@@ -52,8 +75,12 @@ tab1, tab2, tab3 = st.tabs(["Pengaruh Cuaca", "Analisis Hari", "Tren Bulanan"])
 with tab1:
     st.header("Pengaruh Kondisi Cuaca Terhadap Penyewaan")
     
-    # Ambil data cuaca dari data gabungan
-    weather_df = combined_df[combined_df['kategori'] == 'cuaca']
+    # Terapkan filter cuaca
+    weather_df = combined_df[
+        (combined_df['kategori'] == 'cuaca') &
+        (combined_df['weather_label'].isin(selected_weather)) &
+        (combined_df['total'].between(total_range[0], total_range[1]))
+    ]
     
     fig1, ax1 = plt.subplots(figsize=(10, 5))
     sns.barplot(
@@ -69,28 +96,31 @@ with tab1:
     ax1.ticklabel_format(style='plain', axis='y')
     st.pyplot(fig1)
     
-    # Insight
-    st.markdown("""
+    # Insight (disesuaikan dengan filter)
+    if not weather_df.empty:
+        dominant_weather = weather_df['weather_label'].mode()[0]
+        average_total = weather_df['total'].mean()
+    else:
+        dominant_weather = "Tidak ada data"
+        average_total = 0
+    
+    st.markdown(f"""
     **🔍 Insight Cuaca:**
-    - **Pengaruh Dominan:** Cuaca cerah (Clear) menyumbang **87.5%** dari total penyewaan 
-      `(1.875.428 dari 2.147.662 sewa)`
-    - **Penurunan Drastis:** Kondisi hujan/salju berat mengurangi penyewaan hingga **99.9%** 
-      dibanding kondisi cerah `(215 vs 1.875.428 sewa)`
-    - **Pola Jam Sibuk:** Pada cuaca cerah, penyewaan rata-rata/jam mencapai **164 sewa**, 
-      3x lebih tinggi dari kondisi hujan ringan
+    - **Total Data Terseleksi:** {len(weather_df)} kondisi cuaca
+    - **Rentang Sewa:** {total_range[0]:.1f} - {total_range[1]:.1f} juta sewa
+    - **Pola Terfilter:** Cuaca {dominant_weather} dominan dengan rata-rata {average_total:.1f} juta sewa
     """)
 
 with tab2:
     st.header("Perbandingan Penyewaan Hari Kerja vs Hari Libur")
     
-    # Proses data mentah untuk boxplot
+    # Terapkan filter jam
     processed_df = process_day_data(raw_df)
+    processed_df = processed_df[processed_df['cnt'].between(cnt_range[0], cnt_range[1])]
     
-    # Membagi layout menjadi 2 kolom
     col1, col2 = st.columns(2)
     
     with col1:
-        # Ambil data hari dari data gabungan
         day_df = combined_df[combined_df['kategori'] == 'hari']
         clean_day_df = day_df[~day_df['jenis_hari'].isna()]
         
@@ -107,37 +137,24 @@ with tab2:
         st.pyplot(fig2a)
     
     with col2:
-        # Gunakan data mentah untuk boxplot
         fig2b, ax2b = plt.subplots(figsize=(8, 4))
         sns.boxplot(
             data=processed_df,
             x='jenis_hari',
-            y='registered',
+            y='cnt',
             palette='viridis',
             showfliers=False,
             ax=ax2b,
             order=['Hari Kerja', 'Hari Libur', 'Weekend']
         )
-        ax2b.set_title('Distribusi Sewa per Jam (Data Mentah)')
+        ax2b.set_title(f'Distribusi Sewa per Jam ({cnt_range[0]}-{cnt_range[1]} sewa/jam)')
         ax2b.set_ylabel('Jumlah Sewa per Jam')
         ax2b.set_xlabel('Kategori Hari')
         st.pyplot(fig2b)
-        
-        # Insight
-    st.markdown("""
-    **🔍 Insight Hari:**
-    - **Dominasi Hari Kerja:** Menyumbang **77.4%** total sewa `(1.989.125 sewa)` 
-      dengan pola konsisten di jam 7-9 pagi dan 5-7 malam
-    - **Variasi Weekend:** Distribusi sewa lebih merata di weekend dengan rentang 
-      50-200 sewa/jam (lihat boxplot)
-    - **Outlier Hari Libur:** Terdapat jam-jam tertentu di hari libur mencapai **600+ sewa**, 
-      kemungkinan di lokasi wisata
-    """)
 
 with tab3:
+    # Tetap tampilkan tren bulanan tanpa filter
     st.header("Tren Penyewaan Bulanan")
-    
-    # Ambil data bulanan dari data gabungan
     monthly_df = combined_df[combined_df['kategori'] == 'bulan']
     monthly_clean = monthly_df.sort_values('mnth').dropna(subset=['bulan'])
     
@@ -153,18 +170,5 @@ with tab3:
     ax3.set_title('Tren Penyewaan Sepeda Sepanjang Tahun', fontsize=14)
     ax3.set_xlabel('Bulan')
     ax3.set_ylabel('Total Sewa (juta)')
-    ax3.ticklabel_format(style='plain', axis='y')
     plt.xticks(rotation=45)
     st.pyplot(fig3)
-    st.markdown("""
-    **🔍 Insight Tren Bulanan:**
-    - **Musim Puncak:** September menjadi bulan terbaik dengan **345.991 sewa** 
-      (`+14.8%` dari Agustus)
-    - **Dampak Musim Hujan:** Penurunan **39.2%** di Desember bertepatan dengan 
-      peningkatan 144 hari hujan
-    - **Pertumbuhan Signifikan:** 
-      - April `(+51.3%)` - awal musim semi
-      - Mei `(+23.3%)` - persiapan musim panas
-    - **Korelasi Negatif:** 
-      `r = -0.76` antara hari hujan dan jumlah sewa
-    """)
